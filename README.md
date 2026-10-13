@@ -22,6 +22,29 @@ This is a Kotlin/JVM conversion of the Java Banking API Playground. It demonstra
 | `repository` | Thread-safe in-memory storage. |
 | `utils` | Number generation and shared validation. |
 
+The root project is a Maven aggregator with `pom` packaging. It contains shared build configuration and lists the modules, but it does not contain application source code or need a root `src` directory. Each top-level module is an independent Maven project with its own `pom.xml` and conventional source tree:
+
+```text
+kotlin-banking-api/
+├── pom.xml
+├── api/
+│   ├── pom.xml
+│   └── src/main/kotlin/
+├── business/
+│   ├── pom.xml
+│   ├── src/main/kotlin/
+│   └── src/test/kotlin/
+├── domain/
+│   ├── pom.xml
+│   └── src/main/kotlin/
+├── repository/
+│   ├── pom.xml
+│   └── src/main/kotlin/
+└── utils/
+    ├── pom.xml
+    └── src/main/kotlin/
+```
+
 The conversion uses Kotlin data classes for models and DTOs, nullable types at deserialization boundaries, constructor injection, object declarations for stateless utilities, and `@Synchronized` for the same single-instance coordination as the Java project.
 
 ## Requirements and commands
