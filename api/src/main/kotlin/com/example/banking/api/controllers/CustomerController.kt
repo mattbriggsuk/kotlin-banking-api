@@ -1,12 +1,16 @@
 package com.example.banking.api.controllers
 
+import com.example.banking.api.security.RequireAccess
 import com.example.banking.domain.dto.CustomerAccountResponse
 import com.example.banking.domain.dto.CustomerRegisterRequest
 import com.example.banking.domain.dto.CustomerRegisterResponse
 import com.example.banking.domain.dto.CustomerResponse
+import com.example.banking.domain.model.UserSession
+import com.example.banking.domain.service.AccessService
 import com.example.banking.domain.service.CustomerService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -16,32 +20,53 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * Exposes customer registration and lookup operations under `/api/customer`.
+ * Provides customer registration, profile, and account-list endpoints.
  *
- * The controller validates incoming request DTOs, delegates customer rules to [CustomerService],
- * and maps domain results into public response DTOs. The shared API exception handler converts
- * service validation and lookup failures into appropriate HTTP responses.
+ * Registration is public and starts the customer's first session. Profile and account
+ * requests require the [UserSession] created by the bearer authentication filter.
  */
 @RestController
 @RequestMapping("/api/customer")
-class CustomerController(private val customerService: CustomerService) {
-
-    /** Registers a customer and returns the generated customer number with their details. */
+class CustomerController(
+    // Handles customer registration, lookup, and customer-level ownership checks.
+    private val customerService: CustomerService,
+    // Starts the initial session returned after successful registration.
+    private val accessService: AccessService,
+) {
+    /**
+     * Registers a customer and immediately creates their first authenticated session.
+     *
+     * The response returns the generated PIN once, together with the new session token.
+     */
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    fun register(@Valid @RequestBody request: CustomerRegisterRequest) =
-        CustomerRegisterResponse.fromDomain(customerService.register(requireNotNull(request.customer)))
+    fun register(@Valid @RequestBody request: CustomerRegisterRequest): CustomerRegisterResponse {
+        // Bean validation checks the request shape; the service applies registration rules.
+        val registration = customerService.register(requireNotNull(request.customer))
 
-    /** Returns the customer identified by the supplied 16-digit customer number. */
+        // Start a session only after the customer has been registered successfully.
+        val sessionToken = accessService.startSession(requireNotNull(registration.customer.customerNumber))
+        return CustomerRegisterResponse.fromDomain(registration, sessionToken)
+    }
+
+    /** Returns the authenticated customer's profile after the service verifies ownership. */
+    @RequireAccess
     @GetMapping("/get")
-    fun get(@RequestParam customerNumber: String) =
-        CustomerResponse.fromDomain(customerService.getCustomer(customerNumber))
+    fun get(
+        @RequestParam customerNumber: String,
+        @AuthenticationPrincipal userSession: UserSession,
+    ): CustomerResponse =
+        CustomerResponse.fromDomain(customerService.getCustomer(userSession, customerNumber))
 
-    /** Returns all accounts owned by an existing customer. */
+    /** Returns every account belonging to the authenticated customer. */
+    @RequireAccess
     @GetMapping("/accounts")
-    fun accounts(@RequestParam customerNumber: String) =
+    fun accounts(
+        @RequestParam customerNumber: String,
+        @AuthenticationPrincipal userSession: UserSession,
+    ): CustomerAccountResponse =
         CustomerAccountResponse.fromDomain(
             customerNumber,
-            customerService.getCustomerAccounts(customerNumber),
+            customerService.getCustomerAccounts(userSession, customerNumber),
         )
 }

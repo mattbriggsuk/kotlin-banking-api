@@ -1,10 +1,9 @@
 package com.example.banking.domain.dto
 
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Pattern
+import com.example.banking.domain.enums.AccountType
+import jakarta.validation.constraints.NotNull
 
 data class AccountCreateRequest(
-    @field:NotBlank
-    @field:Pattern(regexp = "[0-9]{16}", message = "must contain exactly 16 digits")
-    var customerNumber: String = "",
+    @field:NotNull
+    var accountType: AccountType = AccountType.CURRENT,
 ) : RequestBase()

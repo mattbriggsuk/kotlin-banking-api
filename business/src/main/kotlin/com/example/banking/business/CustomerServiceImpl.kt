@@ -1,13 +1,18 @@
 package com.example.banking.business
 
+import com.example.banking.domain.exceptions.AccessDeniedException
 import com.example.banking.domain.model.Account
 import com.example.banking.domain.model.Customer
+import com.example.banking.domain.model.CustomerRegistration
+import com.example.banking.domain.model.UserSession
 import com.example.banking.domain.repository.AccountRepository
 import com.example.banking.domain.repository.CustomerRepository
 import com.example.banking.domain.service.CustomerService
 import com.example.banking.utils.AccountUtils
+import com.example.banking.utils.PinUtils
 import com.example.banking.utils.ValidationUtils
 import org.springframework.stereotype.Service
+import java.util.Locale
 
 /** Implements customer registration and lookup operations. */
 @Service
@@ -16,37 +21,48 @@ class CustomerServiceImpl(
     private val accountRepository: AccountRepository,
 ) : CustomerService {
 
-    /** Returns an existing customer after validating the supplied customer number. */
-    override fun getCustomer(customerNumber: String): Customer {
+    override fun getCustomer(userSession: UserSession, customerNumber: String): Customer {
         validateNumber(customerNumber)
+        requireCustomer(userSession, customerNumber)
         return customerRepository.getCustomer(customerNumber)
             ?: throw NoSuchElementException("Customer not found")
     }
 
-    /** Confirms that the customer exists before returning their accounts. */
-    override fun getCustomerAccounts(customerNumber: String): List<Account> {
-        getCustomer(customerNumber)
+    override fun getCustomerAccounts(userSession: UserSession, customerNumber: String): List<Account> {
+        getCustomer(userSession, customerNumber)
         return accountRepository.getCustomerAccounts(customerNumber)
     }
 
-    /** Registers a customer and generates their Luhn-valid customer number. */
     @Synchronized
-    override fun register(customer: Customer): Customer {
+    override fun register(customer: Customer): CustomerRegistration {
         require(ValidationUtils.isValidCustomerObject(customer)) {
             "Customer and all required details must be provided"
         }
 
+        check(customerRepository.getCustomerByEmail(customer.email) == null) {
+            "A customer with this email already exists. Log in instead."
+        }
+
+        val pin = PinUtils.generate()
         val registeredCustomer = Customer(
             AccountUtils.generateAccountNumber(),
-            customer.firstName,
-            customer.lastName,
-            customer.email,
+            customer.firstName.trim(),
+            customer.lastName.trim(),
+            customer.email.trim().lowercase(Locale.ROOT),
         )
-        return customerRepository.save(registeredCustomer)
+        val saved = customerRepository.save(registeredCustomer, PinUtils.hash(pin))
+        return CustomerRegistration(saved, pin)
     }
 
-    private fun validateNumber(customerNumber: String) =
+    private fun validateNumber(customerNumber: String) {
         require(ValidationUtils.isValidCustomerNumber(customerNumber)) {
             "Customer number must be a valid 16-digit number"
         }
+    }
+
+    private fun requireCustomer(userSession: UserSession?, customerNumber: String) {
+        if (userSession?.customerNumber != customerNumber) {
+            throw AccessDeniedException()
+        }
+    }
 }

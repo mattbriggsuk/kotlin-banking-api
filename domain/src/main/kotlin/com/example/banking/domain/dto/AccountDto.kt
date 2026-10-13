@@ -1,5 +1,6 @@
 package com.example.banking.domain.dto
 
+import com.example.banking.domain.enums.AccountType
 import com.example.banking.domain.model.Account
 import java.math.BigDecimal
 
@@ -9,6 +10,7 @@ data class AccountDto(
     val customerNumber: String,
     val balance: BigDecimal,
     val closed: Boolean,
+    val accountType: AccountType,
 ) {
     companion object {
         fun fromDomain(account: Account) = AccountDto(
@@ -16,6 +18,7 @@ data class AccountDto(
             account.customerNumber,
             account.balance,
             account.closed,
+            account.accountType,
         )
     }
 }
